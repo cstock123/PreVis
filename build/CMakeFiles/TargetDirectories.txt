@@ -1,0 +1,5 @@
+/Users/doug/Syncthing/Shared/Sandbox/opengl/basecode/build/CMakeFiles/rebuild_cache.dir
+/Users/doug/Syncthing/Shared/Sandbox/opengl/basecode/build/CMakeFiles/edit_cache.dir
+/Users/doug/Syncthing/Shared/Sandbox/opengl/basecode/build/CMakeFiles/P3.dir
+/usr/local/Cellar/glfw/3.3/debug/CMakeFiles/rebuild_cache.dir
+/usr/local/Cellar/glfw/3.3/debug/CMakeFiles/edit_cache.dir
