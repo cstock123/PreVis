@@ -13,6 +13,8 @@
 #include "Shape.h"
 #include "MatrixStack.h"
 #include "WindowManager.h"
+#include "Constants.h"
+#include "Spider.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader/tiny_obj_loader.h>
@@ -36,6 +38,7 @@ public:
 
 	// Shape to be used (from  file) - modify to support multiple
 	shared_ptr<Shape> sphere;
+	Spider spider;
 
 	// Contains vertex information for OpenGL
 	GLuint VertexArrayID;
@@ -121,6 +124,8 @@ public:
 		//then do something with that information.....
 		gMin.x = sphere->min.x;
 		gMin.y = sphere->min.y;
+
+		spider.initialize(sphere);
 	}
 
 	void render(float frametime)
@@ -164,10 +169,15 @@ public:
 			Model->rotate(-angle, vec3(0,0,1));
 			Model->translate(vec3(0, 0, -5));
 			Model->pushMatrix();
-				Model->scale(vec3(0.5, 0.5, 0.5));
+				Model->scale(vec3(0.5));
 				glUniformMatrix4fv(prog->getUniform("M"), 1, GL_FALSE, value_ptr(Model->topMatrix()));
 				sphere->draw(prog);
 			Model->popMatrix();
+		Model->popMatrix();
+		Model->pushMatrix();
+			Model->loadIdentity();
+			Model->translate(vec3(0, 0, -3));
+			spider.draw(prog, Model, angle);
 		Model->popMatrix();
 
 		prog->unbind();
