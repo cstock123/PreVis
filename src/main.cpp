@@ -275,7 +275,6 @@ public:
                 Model->translate(vec3(0, 0, -1));
                 Model->scale(2);
                 Model->rotate(M_PI, YAXIS);
-                spider.time = angle;
                 spider.draw(simple, Model);
             Model->popMatrix();
 

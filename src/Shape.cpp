@@ -70,7 +70,7 @@ void Shape::findEdges()
 		{
 			unsigned int v1 = eleBuf[i * 3 + j];
 			unsigned int v2 = eleBuf[i * 3 + ((j + 1) % 3)];
-			vert_pair pair = make_pair(std::min(v1, v2), std::max(v1, v2));
+			vert_pair pair = make_pair(min(v1, v2), max(v1, v2));
 			edgeSet.insert(pair);
 		}
 	}
