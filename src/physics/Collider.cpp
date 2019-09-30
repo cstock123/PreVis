@@ -35,7 +35,7 @@ void checkSphereSphere(PhysicsObject *sphere1, ColliderSphere *sphereCol1, Physi
 
         Collision collision2;
         collision2.other = sphere1;
-        collision2.normal = collision1.normal;
+        collision2.normal = -collision1.normal;
         collision2.penetration = collision1.penetration;
         collision2.geom = SPHERE;
         collision2.pos = collision1.pos;
