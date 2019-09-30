@@ -13,6 +13,7 @@
 #include "Shape.h"
 #include "MatrixStack.h"
 #include "WindowManager.h"
+#include "Spline.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader/tiny_obj_loader.h>
@@ -28,6 +29,8 @@ class Application : public EventCallbacks
 {
 
 public:
+
+	Spline splinePath[2];
 
 	WindowManager * windowManager = nullptr;
 
@@ -121,6 +124,9 @@ public:
 		//then do something with that information.....
 		gMin.x = sphere->min.x;
 		gMin.y = sphere->min.y;
+
+		splinePath[0] = Spline(glm::vec3(-6,0,-5), glm::vec3(-1,-5,-5), glm::vec3(1, 5, -5), glm::vec3(2,0,-5), 5);
+		splinePath[1] = Spline(glm::vec3(2,0,-5), glm::vec3(3,-5,-5), glm::vec3(-0.25, 0.25, -5), glm::vec3(0,0,-5), 5);
 	}
 
 	void render(float frametime)
@@ -153,16 +159,27 @@ public:
 		glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, value_ptr(Projection->topMatrix()));
 		glUniformMatrix4fv(prog->getUniform("V"), 1, GL_FALSE, value_ptr(View->topMatrix()));
 
-		static float angle = 0;
-		angle += frametime;
+		// follow the two splines
+		glm::vec3 position; 
+		static bool first = true;
+		if(!splinePath[0].isDone())
+		{
+			splinePath[0].update(frametime);
+			position = splinePath[0].getPosition();
+		} else {
+			if(first) {
+				first = false;
+			} else {
+				splinePath[1].update(frametime);
+			}
+			position = splinePath[1].getPosition();
+		}
+
 		// draw mesh 
 		Model->pushMatrix();
 			Model->loadIdentity();
 			//"global" translate
-			Model->rotate(sin(angle)/3.0, vec3(0,1,0));
-			Model->rotate(cos(angle)/3.0, vec3(1,0,0));
-			Model->rotate(-angle, vec3(0,0,1));
-			Model->translate(vec3(0, 0, -5));
+			Model->translate(position);
 			Model->pushMatrix();
 				Model->scale(vec3(0.5, 0.5, 0.5));
 				glUniformMatrix4fv(prog->getUniform("M"), 1, GL_FALSE, value_ptr(Model->topMatrix()));
