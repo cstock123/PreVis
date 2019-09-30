@@ -178,7 +178,7 @@ public:
 			Model->loadIdentity();
 			Model->translate(vec3(0, 0, -1));
 			Model->scale(2);
-			Model->rotate(M_PI, YAXIS);
+			Model->rotate(8 * M_PI / 8, YAXIS);
 			spider.time = angle;
 			spider.draw(prog, Model);
 		Model->popMatrix();
