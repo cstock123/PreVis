@@ -2,6 +2,7 @@
 #include <iostream>
 #include <assert.h>
 #include <unordered_set>
+#include <algorithm>
 
 #include "GLSL.h"
 #include "Program.h"
