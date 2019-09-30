@@ -1,6 +1,7 @@
 
 #include "MatrixStack.h"
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 static const int MaxMatrixSize = 100;
 
@@ -63,6 +64,13 @@ void MatrixStack::rotate(float angle, const glm::vec3 &axis)
 {
 	glm::mat4 &top = stack.top();
 	glm::mat4 r = glm::rotate(glm::mat4(1.0), angle, axis);
+	top *= r;
+}
+
+void MatrixStack::rotate(glm::quat q)
+{
+	glm::mat4 &top = stack.top();
+	glm::mat4 r = mat4_cast(q);
 	top *= r;
 }
 

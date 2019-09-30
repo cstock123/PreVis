@@ -46,6 +46,10 @@
 #include "Shape.h"
 #include "MatrixStack.h"
 #include "WindowManager.h"
+#include "Time.h"
+#include "physics/PhysicsObject.h"
+#include "physics/ColliderSphere.h"
+#include "physics/ColliderMesh.h"
 #include "Constants.h"
 #include "Spider.h"
 #include "ShaderManager.h"
@@ -61,6 +65,8 @@
 using namespace std;
 using namespace glm;
 
+TimeData Time;
+
 class Application : public EventCallbacks
 {
 
@@ -68,14 +74,17 @@ public:
 
 	WindowManager * windowManager = nullptr;
     
-    ShaderManager * shaderManager;
+  ShaderManager * shaderManager;
 
 	// Shape to be used (from  file) - modify to support multiple
 	shared_ptr<Shape> sphere;
+	shared_ptr<Shape> cube;
+
+	vector<shared_ptr<PhysicsObject>> physicsObjects;
 	Spider spider;
 
 	// Two part path
-    Spline splinepath[2];
+  Spline splinepath[2];
 
 	// Contains vertex information for OpenGL
 	GLuint VertexArrayID;
@@ -153,6 +162,43 @@ public:
 		gMin.x = sphere->min.x;
 		gMin.y = sphere->min.y;
 
+		rc = tinyobj::LoadObj(TOshapes, objMaterials, errStr, (resourceDirectory + "/models/cube.obj").c_str());
+		if (!rc) {
+			cerr << errStr << endl;
+		} else {
+			cube = make_shared<Shape>();
+			cube->createShape(TOshapes[0]);
+			cube->measure();
+			cube->init();
+		}
+	}
+
+	/**
+	 * Initialize objects with physics interactions here.
+	 * There are two types of colliders: spheres and meshes.
+	 * Note that spheres can collide with meshes and other spheres, but meshes can't collide with other meshes.
+	 */
+	void initPhysicsObjects() {
+		PhysicsObject::setCulling(false);
+
+		auto physicsBall = make_shared<PhysicsObject>(vec3(0, 0, -10), sphere, make_shared<ColliderSphere>(sphere->size.x / 2));
+		physicsBall->setMass(5);
+		physicsBall->setElasticity(0.5);
+		physicsBall->setFriction(0.25);
+		physicsObjects.push_back(physicsBall);
+
+		physicsBall = make_shared<PhysicsObject>(vec3(-1, -3, -10), sphere, make_shared<ColliderSphere>(sphere->size.x / 2));
+		physicsBall->setElasticity(0.5);
+		physicsBall->setFriction(0.25);
+		physicsObjects.push_back(physicsBall);
+
+		cube->findEdges(); // need to call this for shapes used as collision meshes
+		auto physicsCube = make_shared<PhysicsObject>(vec3(2, -4, -10), cube, make_shared<ColliderMesh>(cube));
+		physicsCube->setElasticity(0.5);
+		physicsCube->setFriction(0.25);
+		physicsCube->orientation = rotate(quat(1, 0, 0, 0), 45.0f, vec3(0, 1, 0));
+		physicsObjects.push_back(physicsCube);
+    
     // Give spider sphere to draw
 		spider.initialize(sphere);
     
@@ -232,8 +278,23 @@ public:
                 spider.time = angle;
                 spider.draw(simple, Model);
             Model->popMatrix();
+
+			for (auto obj : physicsObjects) {
+				obj->draw(simple, Model);
+			}
         simple->unbind();
     }
+
+	void updatePhysics(float dt) {
+		for (int i = 0; i < physicsObjects.size(); i++) {
+			for (int j = i + 1; j < physicsObjects.size(); j++) {
+				physicsObjects[i]->checkCollision(physicsObjects[j].get());
+			}
+		}
+		for (auto obj : physicsObjects) {
+			obj->update();
+		}
+	}
 };
 
 int main(int argc, char *argv[])
@@ -261,8 +322,11 @@ int main(int argc, char *argv[])
 
 	application->init(resourceDir);
 	application->initGeom(resourceDir);
+	application->initPhysicsObjects();
 
 	auto lastTime = chrono::high_resolution_clock::now();
+	float accumulator = 0.0f;
+	Time.physicsDeltaTime = 0.02f;
 
 	// Loop until the user closes the window.
 	while (! glfwWindowShouldClose(windowManager->getHandle()))
@@ -283,6 +347,13 @@ int main(int argc, char *argv[])
 		// reset lastTime so that we can calculate the deltaTime
 		// on the next frame
 		lastTime = nextLastTime;
+
+		accumulator += deltaTime;
+		while (accumulator >= Time.physicsDeltaTime) {
+			application->updatePhysics(Time.physicsDeltaTime);
+			accumulator -= Time.physicsDeltaTime;
+		}
+
 		// Render scene.
 		application->render(deltaTime);
 
