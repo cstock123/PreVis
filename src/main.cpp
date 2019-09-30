@@ -20,6 +20,23 @@
  3) Use the return value of getCurrentShader() to render
  ***********************/
  
+/***********************
+ SPLINE INSTRUCTIONS
+
+ 1) Create a spline object, or an array of splines (for a more complex path)
+ 2) Initialize the splines. I did this in initGeom in this example. There are 
+	two constructors for it, for order 2 and order 3 splines. The first uses
+	a beginning, intermediate control point, and ending. In the case of Bezier splines, 
+	the path is influenced by, but does NOT necessarily touch, the control point. 
+	There is a second constructor, for order 3 splines. These have two control points. 
+	Use these to create S-curves. The constructor also takes a duration of time that the 
+	path should take to be completed. This is in seconds. 
+ 3) Call update(frametime) with the time between the frames being rendered. 
+	3a) Call isDone() and switch to the next part of the path if you are using multiple 
+	    paths or something like that. 
+ 4) Call getPosition() to get the vec3 of where the current calculated position is. 
+ ***********************/
+
 #include <chrono>
 #include <iostream>
 #include <glad/glad.h>
@@ -32,6 +49,7 @@
 #include "Constants.h"
 #include "Spider.h"
 #include "ShaderManager.h"
+#include "Spline.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader/tiny_obj_loader.h>
@@ -55,6 +73,9 @@ public:
 	// Shape to be used (from  file) - modify to support multiple
 	shared_ptr<Shape> sphere;
 	Spider spider;
+
+	// Two part path
+    Spline splinepath[2];
 
 	// Contains vertex information for OpenGL
 	GLuint VertexArrayID;
@@ -132,7 +153,13 @@ public:
 		gMin.x = sphere->min.x;
 		gMin.y = sphere->min.y;
 
+    // Give spider sphere to draw
 		spider.initialize(sphere);
+    
+		// init splines
+		splinepath[0] = Spline(glm::vec3(-6,0,-5), glm::vec3(-1,-5,-5), glm::vec3(1, 5, -5), glm::vec3(2,0,-5), 5);
+		splinepath[1] = Spline(glm::vec3(2,0,-5), glm::vec3(3,-5,-5), glm::vec3(-0.25, 0.25, -5), glm::vec3(0,0,-5), 5);
+	
 	}
     
     mat4 SetProjectionMatrix(shared_ptr<Program> curShader) {
@@ -172,16 +199,24 @@ public:
             // Apply perspective projection.
             SetProjectionMatrix(simple);
             SetViewMatrix(simple);
-            static float angle = 0;
-            angle += frametime;
+
+			// Demo of Bezier Spline
+			glm::vec3 position;
+
+			if(!splinepath[0].isDone())
+			{
+				splinepath[0].update(frametime);
+				position = splinepath[0].getPosition();
+			} else {
+				splinepath[1].update(frametime);
+				position = splinepath[1].getPosition();
+			}
+
             // draw mesh
             Model->pushMatrix();
             Model->loadIdentity();
             //"global" translate
-            Model->rotate(sin(angle)/3.0, vec3(0,1,0));
-            Model->rotate(cos(angle)/3.0, vec3(1,0,0));
-            Model->rotate(-angle, vec3(0,0,1));
-            Model->translate(vec3(0, 0, -5));
+            Model->translate(position);
                 Model->pushMatrix();
                 Model->scale(vec3(0.5, 0.5, 0.5));
                 glUniformMatrix4fv(simple->getUniform("M"), 1, GL_FALSE, value_ptr(Model->topMatrix()));
@@ -195,7 +230,7 @@ public:
                 Model->scale(2);
                 Model->rotate(M_PI, YAXIS);
                 spider.time = angle;
-                spider.draw(prog, Model);
+                spider.draw(simple, Model);
             Model->popMatrix();
         simple->unbind();
     }
