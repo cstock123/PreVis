@@ -46,6 +46,8 @@
 #include "Shape.h"
 #include "MatrixStack.h"
 #include "WindowManager.h"
+#include "Constants.h"
+#include "Spider.h"
 #include "ShaderManager.h"
 #include "Spline.h"
 
@@ -70,6 +72,7 @@ public:
 
 	// Shape to be used (from  file) - modify to support multiple
 	shared_ptr<Shape> sphere;
+	Spider spider;
 
 	// Two part path
     Spline splinepath[2];
@@ -150,6 +153,9 @@ public:
 		gMin.x = sphere->min.x;
 		gMin.y = sphere->min.y;
 
+    // Give spider sphere to draw
+		spider.initialize(sphere);
+    
 		// init splines
 		splinepath[0] = Spline(glm::vec3(-6,0,-5), glm::vec3(-1,-5,-5), glm::vec3(1, 5, -5), glm::vec3(2,0,-5), 5);
 		splinepath[1] = Spline(glm::vec3(2,0,-5), glm::vec3(3,-5,-5), glm::vec3(-0.25, 0.25, -5), glm::vec3(0,0,-5), 5);
@@ -180,10 +186,8 @@ public:
 		glViewport(0, 0, width, height);
 
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        
         shaderManager->setCurrentShader(SIMPLEPROG);
         renderSimpleProg(frametime);
-        
 	}
     
     void renderSimpleProg(float frametime) {
@@ -218,6 +222,15 @@ public:
                 glUniformMatrix4fv(simple->getUniform("M"), 1, GL_FALSE, value_ptr(Model->topMatrix()));
                 sphere->draw(simple);
                 Model->popMatrix();
+            Model->popMatrix();
+            // spider
+            Model->pushMatrix();
+                Model->loadIdentity();
+                Model->translate(vec3(0, 0, -1));
+                Model->scale(2);
+                Model->rotate(M_PI, YAXIS);
+                spider.time = angle;
+                spider.draw(simple, Model);
             Model->popMatrix();
         simple->unbind();
     }
