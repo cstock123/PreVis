@@ -20,6 +20,23 @@
  3) Use the return value of getCurrentShader() to render
  ***********************/
  
+/***********************
+ SPLINE INSTRUCTIONS
+
+ 1) Create a spline object, or an array of splines (for a more complex path)
+ 2) Initialize the splines. I did this in initGeom in this example. There are 
+	two constructors for it, for order 2 and order 3 splines. The first uses
+	a beginning, intermediate control point, and ending. In the case of Bezier splines, 
+	the path is influenced by, but does NOT necessarily touch, the control point. 
+	There is a second constructor, for order 3 splines. These have two control points. 
+	Use these to create S-curves. The constructor also takes a duration of time that the 
+	path should take to be completed. This is in seconds. 
+ 3) Call update(frametime) with the time between the frames being rendered. 
+	3a) Call isDone() and switch to the next part of the path if you are using multiple 
+	    paths or something like that. 
+ 4) Call getPosition() to get the vec3 of where the current calculated position is. 
+ ***********************/
+
 #include <chrono>
 #include <iostream>
 #include <glad/glad.h>
@@ -30,10 +47,13 @@
 #include "MatrixStack.h"
 #include "WindowManager.h"
 #include "Time.h"
-#include "ShaderManager.h"
 #include "physics/PhysicsObject.h"
 #include "physics/ColliderSphere.h"
 #include "physics/ColliderMesh.h"
+#include "Constants.h"
+#include "Spider.h"
+#include "ShaderManager.h"
+#include "Spline.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader/tiny_obj_loader.h>
@@ -54,13 +74,17 @@ public:
 
 	WindowManager * windowManager = nullptr;
     
-    ShaderManager * shaderManager;
+  ShaderManager * shaderManager;
 
 	// Shape to be used (from  file) - modify to support multiple
 	shared_ptr<Shape> sphere;
 	shared_ptr<Shape> cube;
 
 	vector<shared_ptr<PhysicsObject>> physicsObjects;
+	Spider spider;
+
+	// Two part path
+  Spline splinepath[2];
 
 	// Contains vertex information for OpenGL
 	GLuint VertexArrayID;
@@ -174,6 +198,14 @@ public:
 		physicsCube->setFriction(0.25);
 		physicsCube->orientation = rotate(quat(1, 0, 0, 0), 45.0f, vec3(0, 1, 0));
 		physicsObjects.push_back(physicsCube);
+    
+    // Give spider sphere to draw
+		spider.initialize(sphere);
+    
+		// init splines
+		splinepath[0] = Spline(glm::vec3(-6,0,-5), glm::vec3(-1,-5,-5), glm::vec3(1, 5, -5), glm::vec3(2,0,-5), 5);
+		splinepath[1] = Spline(glm::vec3(2,0,-5), glm::vec3(3,-5,-5), glm::vec3(-0.25, 0.25, -5), glm::vec3(0,0,-5), 5);
+	
 	}
     
     mat4 SetProjectionMatrix(shared_ptr<Program> curShader) {
@@ -200,10 +232,8 @@ public:
 		glViewport(0, 0, width, height);
 
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        
         shaderManager->setCurrentShader(SIMPLEPROG);
         renderSimpleProg(frametime);
-        
 	}
     
     void renderSimpleProg(float frametime) {
@@ -215,21 +245,38 @@ public:
             // Apply perspective projection.
             SetProjectionMatrix(simple);
             SetViewMatrix(simple);
-            static float angle = 0;
-            angle += frametime;
+
+			// Demo of Bezier Spline
+			glm::vec3 position;
+
+			if(!splinepath[0].isDone())
+			{
+				splinepath[0].update(frametime);
+				position = splinepath[0].getPosition();
+			} else {
+				splinepath[1].update(frametime);
+				position = splinepath[1].getPosition();
+			}
+
             // draw mesh
             Model->pushMatrix();
             Model->loadIdentity();
             //"global" translate
-            Model->rotate(sin(angle)/3.0, vec3(0,1,0));
-            Model->rotate(cos(angle)/3.0, vec3(1,0,0));
-            Model->rotate(-angle, vec3(0,0,1));
-            Model->translate(vec3(0, 0, -5));
+            Model->translate(position);
                 Model->pushMatrix();
                 Model->scale(vec3(0.5, 0.5, 0.5));
                 glUniformMatrix4fv(simple->getUniform("M"), 1, GL_FALSE, value_ptr(Model->topMatrix()));
                 sphere->draw(simple);
                 Model->popMatrix();
+            Model->popMatrix();
+            // spider
+            Model->pushMatrix();
+                Model->loadIdentity();
+                Model->translate(vec3(0, 0, -1));
+                Model->scale(2);
+                Model->rotate(M_PI, YAXIS);
+                spider.time = angle;
+                spider.draw(simple, Model);
             Model->popMatrix();
 
 			for (auto obj : physicsObjects) {
