@@ -3,6 +3,22 @@
  * multi shape objects 
  * CPE 471 Cal Poly Z. Wood + S. Sueda + I. Dunn
  */
+
+/***********************
+ SHADER MANAGER INSTRUCTIONS
+ 
+ HOW TO ADD A SHADER:
+ 1) Create a #define in ShaderManager.h that will be used to identify your shader
+ 2) Add an init function in ShaderManager.cpp and put your initialization code there
+ - be sure to add a prototype of this function in ShaderManager.h
+ 3) Call your init function from initShaders in ShaderManager.cpp and save it to the
+ respective location in shaderMap. See example
+ 
+ HOW TO USE A SHADER IN THE RENDER LOOP
+ 1) first, call shaderManager.setCurrentShader(int name) to set the current shader
+ 2) To retrieve the current shader, call shaderManager.getCurrentShader()
+ 3) Use the return value of getCurrentShader() to render
+ ***********************/
  
 #include <chrono>
 #include <iostream>
@@ -14,6 +30,7 @@
 #include "MatrixStack.h"
 #include "WindowManager.h"
 #include "Time.h"
+#include "ShaderManager.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader/tiny_obj_loader.h>
@@ -33,9 +50,8 @@ class Application : public EventCallbacks
 public:
 
 	WindowManager * windowManager = nullptr;
-
-	// Our shader program
-	std::shared_ptr<Program> prog;
+    
+    ShaderManager * shaderManager;
 
 	// Shape to be used (from  file) - modify to support multiple
 	shared_ptr<Shape> sphere;
@@ -88,21 +104,12 @@ public:
 		// Enable z-buffer test.
 		glEnable(GL_DEPTH_TEST);
 
-		// Initialize the GLSL program.
-		prog = make_shared<Program>();
-		prog->setVerbose(true);
-		prog->setShaderNames(resourceDirectory + "/shaders/simple_vert.glsl", resourceDirectory + "/shaders/simple_frag.glsl");
-		prog->init();
-		prog->addUniform("P");
-		prog->addUniform("V");
-		prog->addUniform("M");
-		prog->addAttribute("vertPos");
-		prog->addAttribute("vertNor");
+        // create the Instance of ShaderManager which will initialize all shaders in its constructor
+		shaderManager = new ShaderManager(resourceDirectory);
 	}
 
 	void initGeom(const std::string& resourceDirectory)
 	{
-
 		//EXAMPLE new set up to read one shape from one obj file - convert to read several
 		// Initialize mesh
 		// Load geometry
@@ -125,6 +132,22 @@ public:
 		gMin.x = sphere->min.x;
 		gMin.y = sphere->min.y;
 	}
+    
+    mat4 SetProjectionMatrix(shared_ptr<Program> curShader) {
+        int width, height;
+        glfwGetFramebufferSize(windowManager->getHandle(), &width, &height);
+        float aspect = width/(float)height;
+        mat4 Projection = perspective(radians(50.0f), aspect, 0.1f, 100.0f);
+        glUniformMatrix4fv(curShader->getUniform("P"), 1, GL_FALSE, value_ptr(Projection));
+        return Projection;
+    }
+    
+    void SetViewMatrix(shared_ptr<Program> curShader) {
+        auto View = make_shared<MatrixStack>();
+        View->pushMatrix();
+        glUniformMatrix4fv(curShader->getUniform("V"), 1, GL_FALSE, value_ptr(View->topMatrix()));
+        View->popMatrix();
+    }
 
 	void render(float frametime)
 	{
@@ -133,53 +156,40 @@ public:
 		glfwGetFramebufferSize(windowManager->getHandle(), &width, &height);
 		glViewport(0, 0, width, height);
 
-		// Clear framebuffer.
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-		//Use the matrix stack for Lab 6
-		float aspect = width/(float)height;
-
-		// Create the matrix stacks - please leave these alone for now
-		auto Projection = make_shared<MatrixStack>();
-		auto View = make_shared<MatrixStack>();
-		auto Model = make_shared<MatrixStack>();
-
-		// Apply perspective projection.
-		Projection->pushMatrix();
-		Projection->perspective(45.0f, aspect, 0.01f, 100.0f);
-
-		// View is identity - for now
-		View->pushMatrix();
-
-		// Draw a stack of cubes with indiviudal transforms
-		prog->bind();
-		glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, value_ptr(Projection->topMatrix()));
-		glUniformMatrix4fv(prog->getUniform("V"), 1, GL_FALSE, value_ptr(View->topMatrix()));
-
-		static float angle = 0;
-		angle += frametime;
-		// draw mesh 
-		Model->pushMatrix();
-			Model->loadIdentity();
-			//"global" translate
-			Model->rotate(sin(angle)/3.0, vec3(0,1,0));
-			Model->rotate(cos(angle)/3.0, vec3(1,0,0));
-			Model->rotate(-angle, vec3(0,0,1));
-			Model->translate(vec3(0, 0, -5));
-			Model->pushMatrix();
-				Model->scale(vec3(0.5, 0.5, 0.5));
-				glUniformMatrix4fv(prog->getUniform("M"), 1, GL_FALSE, value_ptr(Model->topMatrix()));
-				sphere->draw(prog);
-			Model->popMatrix();
-		Model->popMatrix();
-
-		prog->unbind();
-
-		// Pop matrix stacks.
-		Projection->popMatrix();
-		View->popMatrix();
-
+        
+        shaderManager->setCurrentShader(SIMPLEPROG);
+        renderSimpleProg(frametime);
+        
 	}
+    
+    void renderSimpleProg(float frametime) {
+        shared_ptr<Program> simple = shaderManager->getCurrentShader();
+
+        auto Model = make_shared<MatrixStack>();
+
+        simple->bind();
+            // Apply perspective projection.
+            SetProjectionMatrix(simple);
+            SetViewMatrix(simple);
+            static float angle = 0;
+            angle += frametime;
+            // draw mesh
+            Model->pushMatrix();
+            Model->loadIdentity();
+            //"global" translate
+            Model->rotate(sin(angle)/3.0, vec3(0,1,0));
+            Model->rotate(cos(angle)/3.0, vec3(1,0,0));
+            Model->rotate(-angle, vec3(0,0,1));
+            Model->translate(vec3(0, 0, -5));
+                Model->pushMatrix();
+                Model->scale(vec3(0.5, 0.5, 0.5));
+                glUniformMatrix4fv(simple->getUniform("M"), 1, GL_FALSE, value_ptr(Model->topMatrix()));
+                sphere->draw(simple);
+                Model->popMatrix();
+            Model->popMatrix();
+        simple->unbind();
+    }
 };
 
 int main(int argc, char *argv[])
