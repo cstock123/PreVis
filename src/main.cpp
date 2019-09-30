@@ -3,7 +3,40 @@
  * multi shape objects 
  * CPE 471 Cal Poly Z. Wood + S. Sueda + I. Dunn
  */
+
+/***********************
+ SHADER MANAGER INSTRUCTIONS
  
+ HOW TO ADD A SHADER:
+ 1) Create a #define in ShaderManager.h that will be used to identify your shader
+ 2) Add an init function in ShaderManager.cpp and put your initialization code there
+ - be sure to add a prototype of this function in ShaderManager.h
+ 3) Call your init function from initShaders in ShaderManager.cpp and save it to the
+ respective location in shaderMap. See example
+ 
+ HOW TO USE A SHADER IN THE RENDER LOOP
+ 1) first, call shaderManager.setCurrentShader(int name) to set the current shader
+ 2) To retrieve the current shader, call shaderManager.getCurrentShader()
+ 3) Use the return value of getCurrentShader() to render
+ ***********************/
+ 
+/***********************
+ SPLINE INSTRUCTIONS
+
+ 1) Create a spline object, or an array of splines (for a more complex path)
+ 2) Initialize the splines. I did this in initGeom in this example. There are 
+	two constructors for it, for order 2 and order 3 splines. The first uses
+	a beginning, intermediate control point, and ending. In the case of Bezier splines, 
+	the path is influenced by, but does NOT necessarily touch, the control point. 
+	There is a second constructor, for order 3 splines. These have two control points. 
+	Use these to create S-curves. The constructor also takes a duration of time that the 
+	path should take to be completed. This is in seconds. 
+ 3) Call update(frametime) with the time between the frames being rendered. 
+	3a) Call isDone() and switch to the next part of the path if you are using multiple 
+	    paths or something like that. 
+ 4) Call getPosition() to get the vec3 of where the current calculated position is. 
+ ***********************/
+
 #include <chrono>
 #include <iostream>
 #include <glad/glad.h>
@@ -13,6 +46,7 @@
 #include "Shape.h"
 #include "MatrixStack.h"
 #include "WindowManager.h"
+#include "ShaderManager.h"
 #include "Spline.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
@@ -30,15 +64,15 @@ class Application : public EventCallbacks
 
 public:
 
-	Spline splinePath[2];
-
 	WindowManager * windowManager = nullptr;
-
-	// Our shader program
-	std::shared_ptr<Program> prog;
+    
+    ShaderManager * shaderManager;
 
 	// Shape to be used (from  file) - modify to support multiple
 	shared_ptr<Shape> sphere;
+
+	// Two part path
+    Spline splinepath[2];
 
 	// Contains vertex information for OpenGL
 	GLuint VertexArrayID;
@@ -88,21 +122,12 @@ public:
 		// Enable z-buffer test.
 		glEnable(GL_DEPTH_TEST);
 
-		// Initialize the GLSL program.
-		prog = make_shared<Program>();
-		prog->setVerbose(true);
-		prog->setShaderNames(resourceDirectory + "/shaders/simple_vert.glsl", resourceDirectory + "/shaders/simple_frag.glsl");
-		prog->init();
-		prog->addUniform("P");
-		prog->addUniform("V");
-		prog->addUniform("M");
-		prog->addAttribute("vertPos");
-		prog->addAttribute("vertNor");
+        // create the Instance of ShaderManager which will initialize all shaders in its constructor
+		shaderManager = new ShaderManager(resourceDirectory);
 	}
 
 	void initGeom(const std::string& resourceDirectory)
 	{
-
 		//EXAMPLE new set up to read one shape from one obj file - convert to read several
 		// Initialize mesh
 		// Load geometry
@@ -125,9 +150,27 @@ public:
 		gMin.x = sphere->min.x;
 		gMin.y = sphere->min.y;
 
-		splinePath[0] = Spline(glm::vec3(-6,0,-5), glm::vec3(-1,-5,-5), glm::vec3(1, 5, -5), glm::vec3(2,0,-5), 5);
-		splinePath[1] = Spline(glm::vec3(2,0,-5), glm::vec3(3,-5,-5), glm::vec3(-0.25, 0.25, -5), glm::vec3(0,0,-5), 5);
+		// init splines
+		splinepath[0] = Spline(glm::vec3(-6,0,-5), glm::vec3(-1,-5,-5), glm::vec3(1, 5, -5), glm::vec3(2,0,-5), 5);
+		splinepath[1] = Spline(glm::vec3(2,0,-5), glm::vec3(3,-5,-5), glm::vec3(-0.25, 0.25, -5), glm::vec3(0,0,-5), 5);
+	
 	}
+    
+    mat4 SetProjectionMatrix(shared_ptr<Program> curShader) {
+        int width, height;
+        glfwGetFramebufferSize(windowManager->getHandle(), &width, &height);
+        float aspect = width/(float)height;
+        mat4 Projection = perspective(radians(50.0f), aspect, 0.1f, 100.0f);
+        glUniformMatrix4fv(curShader->getUniform("P"), 1, GL_FALSE, value_ptr(Projection));
+        return Projection;
+    }
+    
+    void SetViewMatrix(shared_ptr<Program> curShader) {
+        auto View = make_shared<MatrixStack>();
+        View->pushMatrix();
+        glUniformMatrix4fv(curShader->getUniform("V"), 1, GL_FALSE, value_ptr(View->topMatrix()));
+        View->popMatrix();
+    }
 
 	void render(float frametime)
 	{
@@ -136,64 +179,48 @@ public:
 		glfwGetFramebufferSize(windowManager->getHandle(), &width, &height);
 		glViewport(0, 0, width, height);
 
-		// Clear framebuffer.
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-		//Use the matrix stack for Lab 6
-		float aspect = width/(float)height;
-
-		// Create the matrix stacks - please leave these alone for now
-		auto Projection = make_shared<MatrixStack>();
-		auto View = make_shared<MatrixStack>();
-		auto Model = make_shared<MatrixStack>();
-
-		// Apply perspective projection.
-		Projection->pushMatrix();
-		Projection->perspective(45.0f, aspect, 0.01f, 100.0f);
-
-		// View is identity - for now
-		View->pushMatrix();
-
-		// Draw a stack of cubes with indiviudal transforms
-		prog->bind();
-		glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, value_ptr(Projection->topMatrix()));
-		glUniformMatrix4fv(prog->getUniform("V"), 1, GL_FALSE, value_ptr(View->topMatrix()));
-
-		// follow the two splines
-		glm::vec3 position; 
-		static bool first = true;
-		if(!splinePath[0].isDone())
-		{
-			splinePath[0].update(frametime);
-			position = splinePath[0].getPosition();
-		} else {
-			if(first) {
-				first = false;
-			} else {
-				splinePath[1].update(frametime);
-			}
-			position = splinePath[1].getPosition();
-		}
-
-		// draw mesh 
-		Model->pushMatrix();
-			Model->loadIdentity();
-			//"global" translate
-			Model->translate(position);
-			Model->pushMatrix();
-				Model->scale(vec3(0.5, 0.5, 0.5));
-				glUniformMatrix4fv(prog->getUniform("M"), 1, GL_FALSE, value_ptr(Model->topMatrix()));
-				sphere->draw(prog);
-			Model->popMatrix();
-		Model->popMatrix();
-
-		prog->unbind();
-
-		// Pop matrix stacks.
-		Projection->popMatrix();
-		View->popMatrix();
-
+        
+        shaderManager->setCurrentShader(SIMPLEPROG);
+        renderSimpleProg(frametime);
+        
 	}
+    
+    void renderSimpleProg(float frametime) {
+        shared_ptr<Program> simple = shaderManager->getCurrentShader();
+
+        auto Model = make_shared<MatrixStack>();
+
+        simple->bind();
+            // Apply perspective projection.
+            SetProjectionMatrix(simple);
+            SetViewMatrix(simple);
+
+			// Demo of Bezier Spline
+			glm::vec3 position;
+
+			if(!splinepath[0].isDone())
+			{
+				splinepath[0].update(frametime);
+				position = splinepath[0].getPosition();
+			} else {
+				splinepath[1].update(frametime);
+				position = splinepath[1].getPosition();
+			}
+
+            // draw mesh
+            Model->pushMatrix();
+            Model->loadIdentity();
+            //"global" translate
+            Model->translate(position);
+                Model->pushMatrix();
+                Model->scale(vec3(0.5, 0.5, 0.5));
+                glUniformMatrix4fv(simple->getUniform("M"), 1, GL_FALSE, value_ptr(Model->topMatrix()));
+                sphere->draw(simple);
+                Model->popMatrix();
+            Model->popMatrix();
+        simple->unbind();
+    }
 };
 
 int main(int argc, char *argv[])
