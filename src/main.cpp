@@ -13,6 +13,7 @@
 #include "Shape.h"
 #include "MatrixStack.h"
 #include "WindowManager.h"
+#include "Time.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader/tiny_obj_loader.h>
@@ -23,6 +24,8 @@
 
 using namespace std;
 using namespace glm;
+
+TimeData Time;
 
 class Application : public EventCallbacks
 {

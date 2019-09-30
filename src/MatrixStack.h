@@ -10,6 +10,7 @@
 #include "glm/vec4.hpp"
 #include "glm/mat4x4.hpp"
 #include "glm/gtc/matrix_transform.hpp"
+#include <glm/gtc/quaternion.hpp>
 
 
 class MatrixStack
@@ -46,6 +47,7 @@ public:
 	// Right multiplies the top matrix by a rotation matrix (angle in deg)
 	void rotate(float angle, const glm::vec3 &axis);
 
+	void rotate(glm::quat q);
 
 	// Gets the top matrix
 	const glm::mat4 &topMatrix() const;
